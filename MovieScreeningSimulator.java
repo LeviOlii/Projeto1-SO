@@ -346,6 +346,7 @@ public class MovieScreeningSimulator {
         public int targetX, targetY;
         private String currentStatusForVisuals;
         private boolean moving;
+        private boolean visible = true;
 
         public Fan(String fanId, int tlLunchTime, BufferedImage image) {
             this.fanId = fanId;
@@ -365,6 +366,7 @@ public class MovieScreeningSimulator {
             this.currentStatusForVisuals = status;
             if (visualizacaoPanel != null) {
                 visualizacaoPanel.setFanTargetPosition(this);
+                visualizacaoPanel.repaint(); 
             }
         }
 
@@ -479,11 +481,12 @@ public class MovieScreeningSimulator {
         public void addFanSprite(Fan fan) {
             synchronized(fansToDraw) {
                 fansToDraw.add(fan);
-                // O fã é criado no PONTO_ENTRADA. assignInitialFanPosition define seu target para o slot.
                 assignInitialFanPosition(fan);
+                fan.setMoving(true);
             }
             repaint();
         }
+
 
         private void assignInitialFanPosition(Fan fan) {
             int queueIndex = 0;
@@ -529,10 +532,18 @@ public class MovieScreeningSimulator {
             }
         }
 
+        private int countFansInArea(List<Fan> fans, String areaStatus) {
+            int count = 0;
+            for (Fan fan : fans) {
+                if (areaStatus.equals(fan.getVisualStatus())) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+
         private void assignFanPositionBasedOnStatus(Fan fan) {
-            int queueIndex = 0;
-            int auditoriumIndex = 0;
-            int snackBarIndex = 0;
             String targetStatus = fan.getVisualStatus();
             if (targetStatus == null) return;
 
@@ -541,41 +552,44 @@ public class MovieScreeningSimulator {
                 currentFansSnapshot = new ArrayList<>(fansToDraw);
             }
 
-            for(Fan existingFan : currentFansSnapshot) {
-                if(existingFan == fan) continue;
-                String existingVisualStatus = existingFan.getVisualStatus();
-                if (existingVisualStatus == null) continue;
+            int positionIndex = 0;
 
-                if (targetStatus.equals(existingVisualStatus) && !existingFan.isMoving()) {
-                     switch (targetStatus) {
-                        case "Na fila": queueIndex++; break;
-                        case "Aguardando filme": case "Assistindo filme": auditoriumIndex++; break;
-                        case "Lanchando": case "Saindo para lanchar": snackBarIndex++; break;
-                    }
+            for (Fan otherFan : currentFansSnapshot) {
+                if (otherFan == fan) continue;  // não se contar
+                if (targetStatus.equals(otherFan.getVisualStatus())) {
+                    positionIndex++;
                 }
             }
 
             switch (targetStatus) {
                 case "Na fila":
+                    fan.visible = true;
                     fan.targetX = AREA_FILA_X;
-                    fan.targetY = AREA_Y_BOTTOM + (queueIndex * Y_SPACING);
+                    fan.targetY = AREA_Y_BOTTOM + (positionIndex * Y_SPACING);
                     break;
+
                 case "Aguardando filme":
                 case "Assistindo filme":
+                    fan.visible = false;
                     fan.targetX = AREA_AUDITORIO_X;
-                    fan.targetY = AREA_Y_START_TOP + (auditoriumIndex * Y_SPACING);
+                    fan.targetY = AREA_Y_START_TOP + (positionIndex * Y_SPACING);
                     break;
-                case "Lanchando":
+
                 case "Saindo para lanchar":
+                case "Lanchando":
+                    fan.visible = true;
                     fan.targetX = AREA_LANCHONETE_X;
-                    fan.targetY = AREA_Y_START_TOP + (snackBarIndex * Y_SPACING);
+                    fan.targetY = AREA_Y_START_TOP + (positionIndex * Y_SPACING);
                     break;
+
                 default:
-                    fan.targetX = - (IMAGE_TARGET_WIDTH + 50) ;
+                    fan.visible = false;
+                    fan.targetX = - (IMAGE_TARGET_WIDTH + 50);
                     fan.targetY = - (IMAGE_TARGET_HEIGHT + 50);
                     break;
             }
         }
+
 
         @Override
         public void actionPerformed(ActionEvent e) {
@@ -638,7 +652,7 @@ public class MovieScreeningSimulator {
             }
 
             for (Fan fan : fansCopy) {
-                if (fan != null &&  fan.image != null) {
+                if (fan != null && fan.visible &&  fan.image != null) {
                     g2d.drawImage(fan.image, fan.x, fan.y, IMAGE_TARGET_WIDTH, IMAGE_TARGET_HEIGHT, this);
                 } else if (fan != null && fan.image == null) {
                     g2d.setColor(Color.DARK_GRAY);
