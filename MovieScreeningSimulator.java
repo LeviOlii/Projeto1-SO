@@ -296,7 +296,7 @@ public class MovieScreeningSimulator {
         fanThreads.add(fan);
         if (visualizacaoPanel != null) visualizacaoPanel.addFanSprite(fan);
         fan.start();
-        log("Fã " + fanId + " (imagem: "+ fanColorName +".png) criado (Tl=" + tlFanLunchTime + "s).");
+        log(fanId + " (imagem: "+ fanColorName +".png) criado (Tl=" + tlFanLunchTime + "s).");
     }
 
     class Demonstrator extends Thread {
@@ -315,10 +315,15 @@ public class MovieScreeningSimulator {
                     log("DEMONSTRADOR: Exibindo filme por " + TE_MOVIE_DURATION_SECONDS + "s...");
                     movieIsOn = true;
                     long tempoInicio = System.currentTimeMillis();
-                    
+                    int contadorLog = 0;
+
                     semMovieStarted.release(N_CAPACITY);
                     while ((System.currentTimeMillis() - tempoInicio) < TE_MOVIE_DURATION_SECONDS * 1000L) {
-                        log("DEMONSTRADOR: Filme em progresso...");
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
+                            long segundosDecorridos = (System.currentTimeMillis() - tempoInicio) / 1000;
+                            long segundosRestantes = TE_MOVIE_DURATION_SECONDS - segundosDecorridos;
+                            log("DEMONSTRADOR: Filme em progresso (" + segundosRestantes + "s restantes)");
+                        }
                     }
 
                     movieIsOn = false;
@@ -427,12 +432,19 @@ public class MovieScreeningSimulator {
                     }
                     semAuditoriumMutex.release();
 
-                    setVisualStatus("Lanchando");
-                    log(fanId + ": Lanchando por " + tlLunchTimeSeconds + "s...");
-                    Thread.sleep(tlLunchTimeSeconds * 1000);
-
-                    log(fanId + ": Terminou de lanchar. Devolvendo 'assento geral' e voltando para a fila.");
                     semSeats.release();
+                    log(fanId + ": Terminou de assistir. Devolvendo 'assento geral' e indo lanchar.");
+
+                    setVisualStatus("Lanchando");  
+                    long tempoInicio = System.currentTimeMillis();     
+                    int contadorLog = 0;               
+                    while ((System.currentTimeMillis() - tempoInicio) < tlLunchTimeSeconds * 1000L) {
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
+                                long segundosDecorridos = (System.currentTimeMillis() - tempoInicio) / 1000;
+                                long segundosRestantes = tlLunchTimeSeconds - segundosDecorridos;
+                                log(fanId + ": Lanchando... (" + segundosRestantes + "s restantes)");
+                        }
+                    }
                 }
             } catch (InterruptedException e) {
                 log(fanId + ": Thread interrompida.");
