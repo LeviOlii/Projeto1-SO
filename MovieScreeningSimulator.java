@@ -412,10 +412,13 @@ public class MovieScreeningSimulator {
 
                     log(fanId + ": Esperando o filme começar...");
                     semMovieStarted.acquire();
-
+                    int contadorLog = 0;
                     setVisualStatus("Assistindo filme");
                     while(movieIsOn == true){
-                        log(fanId + ": Filme começou! Assistindo...");
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
+
+                            log(fanId + ": Filme começou! Assistindo...");
+                        }
                     }
                     //semMovieFinished.acquire();
 
@@ -437,7 +440,7 @@ public class MovieScreeningSimulator {
 
                     setVisualStatus("Lanchando");  
                     long tempoInicio = System.currentTimeMillis();     
-                    int contadorLog = 0;               
+                    contadorLog = 0;               
                     while ((System.currentTimeMillis() - tempoInicio) < tlLunchTimeSeconds * 1000L) {
                         if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
                                 long segundosDecorridos = (System.currentTimeMillis() - tempoInicio) / 1000;
@@ -484,8 +487,8 @@ public class MovieScreeningSimulator {
 
         // Timer e outras variáveis
         private Timer animationTimer;
-        private static final int MOVEMENT_SPEED = 3;
-        private static final int ANIMATION_DELAY = 60;
+        private static final int MOVEMENT_SPEED = 10;
+        private static final int ANIMATION_DELAY = 40;
         private BufferedImage panelBackgroundImage;
 
         public VisualizacaoPanel(BufferedImage backgroundImage) {
@@ -575,7 +578,7 @@ public class MovieScreeningSimulator {
             int positionIndex = 0;
 
             for (Fan otherFan : currentFansSnapshot) {
-                if (otherFan == fan) continue;  // não se contar
+                if (otherFan == fan) continue;
                 if (targetStatus.equals(otherFan.getVisualStatus())) {
                     positionIndex++;
                 }
@@ -589,6 +592,8 @@ public class MovieScreeningSimulator {
                     break;
 
                 case "Aguardando filme":
+                    fan.visible = true;
+                    break;
                 case "Assistindo filme":
                     fan.visible = false;
                     fan.targetX = AREA_AUDITORIO_X;
