@@ -4,6 +4,7 @@ import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,7 +36,7 @@ public class MovieScreeningSimulator {
     private volatile int fansLeftThisSession = 0;
     private AtomicInteger fanIdCounter = new AtomicInteger(1);
     private final List<Fan> fanThreads = Collections.synchronizedList(new ArrayList<>());
-
+    private static boolean movieIsOn = false;
 
     // Image resources
     private Map<String, BufferedImage> characterImages;
@@ -240,7 +241,7 @@ public class MovieScreeningSimulator {
         semAuditoriumMutex = new Semaphore(1, true);
         semDemonstratorWakeUp = new Semaphore(0, true);
         semMovieStarted = new Semaphore(0, true);
-        semMovieFinished = new Semaphore(0, true);
+        //semMovieFinished = new Semaphore(0, true);
         semAllFansLeft = new Semaphore(0, true);
 
         currentFanCountInAuditorium = 0;
@@ -295,7 +296,7 @@ public class MovieScreeningSimulator {
         fanThreads.add(fan);
         if (visualizacaoPanel != null) visualizacaoPanel.addFanSprite(fan);
         fan.start();
-        log("Fã " + fanId + " (imagem: "+ fanColorName +".png) criado (Tl=" + tlFanLunchTime + "s).");
+        log(fanId + " (imagem: "+ fanColorName +".png) criado (Tl=" + tlFanLunchTime + "s).");
     }
 
     class Demonstrator extends Thread {
@@ -310,13 +311,24 @@ public class MovieScreeningSimulator {
                     String showingStatus = "Exibindo Filme (" + currentFanCountInAuditorium + "/" + N_CAPACITY + ")";
                     updateDemonstratorStatus(showingStatus);
                     log("DEMONSTRADOR: Auditório lotado ("+ currentFanCountInAuditorium + "/" + N_CAPACITY + "). Iniciando filme...");
-                    semMovieStarted.release(N_CAPACITY);
 
                     log("DEMONSTRADOR: Exibindo filme por " + TE_MOVIE_DURATION_SECONDS + "s...");
-                    Thread.sleep(TE_MOVIE_DURATION_SECONDS * 1000);
+                    movieIsOn = true;
+                    long tempoInicio = System.currentTimeMillis();
+                    int contadorLog = 0;
 
+                    semMovieStarted.release(N_CAPACITY);
+                    while ((System.currentTimeMillis() - tempoInicio) < TE_MOVIE_DURATION_SECONDS * 1000L) {
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
+                            long segundosDecorridos = (System.currentTimeMillis() - tempoInicio) / 1000;
+                            long segundosRestantes = TE_MOVIE_DURATION_SECONDS - segundosDecorridos;
+                            log("DEMONSTRADOR: Filme em progresso (" + segundosRestantes + "s restantes)");
+                        }
+                    }
+
+                    movieIsOn = false;
                     log("DEMONSTRADOR: Filme encerrado.");
-                    semMovieFinished.release(N_CAPACITY);
+                    //semMovieFinished.release(N_CAPACITY);
                     updateDemonstratorStatus("Aguardando Esvaziar");
 
                     log("DEMONSTRADOR: Aguardando todos os " + N_CAPACITY + " fãs saírem...");
@@ -400,11 +412,15 @@ public class MovieScreeningSimulator {
 
                     log(fanId + ": Esperando o filme começar...");
                     semMovieStarted.acquire();
-
+                    int contadorLog = 0;
                     setVisualStatus("Assistindo filme");
-                    log(fanId + ": Filme começou! Assistindo...");
+                    while(movieIsOn == true){
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
 
-                    semMovieFinished.acquire();
+                            log(fanId + ": Filme começou! Assistindo...");
+                        }
+                    }
+                    //semMovieFinished.acquire();
 
                     semAuditoriumMutex.acquire();
                     currentFanCountInAuditorium--;
@@ -419,12 +435,19 @@ public class MovieScreeningSimulator {
                     }
                     semAuditoriumMutex.release();
 
-                    setVisualStatus("Lanchando");
-                    log(fanId + ": Lanchando por " + tlLunchTimeSeconds + "s...");
-                    Thread.sleep(tlLunchTimeSeconds * 1000);
-
-                    log(fanId + ": Terminou de lanchar. Devolvendo 'assento geral' e voltando para a fila.");
                     semSeats.release();
+                    log(fanId + ": Terminou de assistir. Devolvendo 'assento geral' e indo lanchar.");
+
+                    setVisualStatus("Lanchando");  
+                    long tempoInicio = System.currentTimeMillis();     
+                    contadorLog = 0;               
+                    while ((System.currentTimeMillis() - tempoInicio) < tlLunchTimeSeconds * 1000L) {
+                        if (contadorLog++ % 100000000 == 0) { //Exibe log a cada 100.000.000 iterações
+                                long segundosDecorridos = (System.currentTimeMillis() - tempoInicio) / 1000;
+                                long segundosRestantes = tlLunchTimeSeconds - segundosDecorridos;
+                                log(fanId + ": Lanchando... (" + segundosRestantes + "s restantes)");
+                        }
+                    }
                 }
             } catch (InterruptedException e) {
                 log(fanId + ": Thread interrompida.");
@@ -464,8 +487,8 @@ public class MovieScreeningSimulator {
 
         // Timer e outras variáveis
         private Timer animationTimer;
-        private static final int MOVEMENT_SPEED = 3;
-        private static final int ANIMATION_DELAY = 60;
+        private static final int MOVEMENT_SPEED = 10;
+        private static final int ANIMATION_DELAY = 40;
         private BufferedImage panelBackgroundImage;
 
         public VisualizacaoPanel(BufferedImage backgroundImage) {
@@ -555,7 +578,7 @@ public class MovieScreeningSimulator {
             int positionIndex = 0;
 
             for (Fan otherFan : currentFansSnapshot) {
-                if (otherFan == fan) continue;  // não se contar
+                if (otherFan == fan) continue;
                 if (targetStatus.equals(otherFan.getVisualStatus())) {
                     positionIndex++;
                 }
@@ -569,6 +592,8 @@ public class MovieScreeningSimulator {
                     break;
 
                 case "Aguardando filme":
+                    fan.visible = true;
+                    break;
                 case "Assistindo filme":
                     fan.visible = false;
                     fan.targetX = AREA_AUDITORIO_X;
